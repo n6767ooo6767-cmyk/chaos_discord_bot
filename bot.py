@@ -1,8 +1,10 @@
 import os
 import random
 import asyncio
+from datetime import timedelta
+
 import discord
-from discord.ext import commands, tasks
+from discord.ext import commands
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 CHANNEL_ID = int(os.getenv("CHAOS_CHANNEL_ID", "0"))
@@ -54,7 +56,7 @@ async def try_real_action(guild):
         if action == "kick":
             await member.kick(reason="ChaosBot random event")
         else:
-            await member.timeout(discord.utils.utcnow() + discord.utils.timedelta(minutes=1), reason="ChaosBot random event")
+            await member.timeout(timedelta(minutes=1), reason="ChaosBot random event")
         return True
     except (discord.Forbidden, discord.HTTPException):
         return False
@@ -69,7 +71,6 @@ async def chaos_loop():
         if channel is None:
             continue
 
-        # Most events are harmless; real moderation actions are rare.
         roll = random.random()
         if roll < 0.01:
             acted = await try_real_action(channel.guild)
@@ -78,33 +79,33 @@ async def chaos_loop():
         elif roll < 0.35:
             await channel.send(random.choice(SAFE_MESSAGES))
         else:
-            try:
-                await channel.send(random.choice([
-                    "🎲 *рандомное событие прошло мимо...*",
-                    "...",
-                    "🤨",
-                    "система задумалась.",
-                ]))
-            except discord.HTTPException:
-                pass
+            await channel.send(random.choice([
+                "🎲 *рандомное событие прошло мимо...*",
+                "...",
+                "🤨",
+                "система задумалась.",
+            ]))
 
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user} ({bot.user.id})")
-    if not chaos_loop.is_running():
-        chaos_loop.start()
+    if not any(t.get_name() == "chaos-loop" for t in asyncio.all_tasks()):
+        asyncio.create_task(chaos_loop(), name="chaos-loop")
 
 @bot.command()
 @commands.has_permissions(manage_guild=True)
 async def chaos(ctx, action: str = "status"):
-    if action.lower() == "status":
+    action = action.lower()
+    if action == "status":
         await ctx.send(f"🤖 ChaosBot online. Интервал: {MIN_DELAY}-{MAX_DELAY} сек.")
-    elif action.lower() == "stop":
-        chaos_loop.cancel()
+    elif action == "stop":
+        for task in asyncio.all_tasks():
+            if task.get_name() == "chaos-loop":
+                task.cancel()
         await ctx.send("🛑 хаос остановлен.")
-    elif action.lower() == "start":
-        if not chaos_loop.is_running():
-            chaos_loop.start()
+    elif action == "start":
+        if not any(t.get_name() == "chaos-loop" for t in asyncio.all_tasks()):
+            asyncio.create_task(chaos_loop(), name="chaos-loop")
         await ctx.send("🎲 хаос снова активирован.")
 
 @bot.event
