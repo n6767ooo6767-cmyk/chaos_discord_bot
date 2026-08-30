@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: chaosbot-redirect
+    runtime: python
+    rootDir: redirect
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    plan: free
+    envVars:
+      - key: DISCORD_INSTALL_URL
+        sync: false
